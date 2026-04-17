@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mlx-benchmark"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Benchmark LLMs on Apple MLX knowledge and coding tasks"
 readme = "README.md"
 license = "MIT"
@@ -35,6 +35,9 @@ mlx-bench = "mlx_benchmark.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["mlx_benchmark*"]
+
+[tool.setuptools.dynamic]
+version = {attr = "mlx_benchmark.version.__version__"}
 
 [tool.setuptools.package-data]
 "mlx_benchmark.data" = ["*.jsonl"]

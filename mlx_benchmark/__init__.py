@@ -5,8 +5,7 @@ from .dataset import load_dataset, filter_dataset
 from .export import generate_latex_table, generate_plot, load_result_files, find_result_files
 from .judge import evaluate
 from .runner import run_benchmark, BenchResult, BenchStats
-
-__version__ = "0.1.0"
+from .version import __version__
 
 __all__ = [
     "Backend",
