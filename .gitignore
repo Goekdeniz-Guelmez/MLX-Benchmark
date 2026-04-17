@@ -1,0 +1,16 @@
+gen*.py
+.gen*.py
+.claude/
+results*/*
+*egg.info/
+*.log
+*.cache/
+*.jsonl
+*.tex
+*.pdf
+*.png
+*__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.so

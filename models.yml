@@ -1,0 +1,51 @@
+# MLX Benchmark — Model Configuration
+#
+# List the models you want to benchmark. Each entry needs at minimum a
+# `name` and `provider`. All other fields are optional.
+#
+# Usage:
+#   mlx-bench --config models.yml
+#   mlx-bench --config models.yml --limit 20          # quick test
+#   mlx-bench --config models.yml --types coding debug  # filter
+#
+# You can still use --model for ad-hoc runs:
+#   mlx-bench --model llama3.2
+
+models:
+  - name: glm-5.1:cloud
+    provider: ollama
+
+  - name: gemma4:31b-cloud
+    provider: ollama
+
+  - name: nemotron-3-super:cloud
+    provider: ollama
+
+  - name: qwen3.5:cloud
+    provider: ollama
+
+  # Add more Ollama models below:
+  # - name: mistral
+  #   provider: ollama
+  # - name: qwen2.5-coder
+  #   provider: ollama
+
+  # Cloud providers — set API keys via env vars:
+  # - name: claude-sonnet-4-20250514
+  #   provider: anthropic
+  # - name: gpt-4o
+  #   provider: openai
+  # - name: anthropic/claude-sonnet-4-20250514
+  #   provider: openrouter
+  # - name: llama-3.2-70b-versatile
+  #   provider: groq
+
+# Optional: override the judge model (defaults to same as model)
+# judge:
+#   name: gemma4:31b-cloud
+#   provider: ollama
+
+# Optional: override default settings
+# max_tokens: 1024
+# temperature: 0.0
+# rate_limit: 0.5
