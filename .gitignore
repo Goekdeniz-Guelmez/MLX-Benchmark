@@ -9,8 +9,9 @@ results*/*
 *.tex
 *.pdf
 *.png
-*__pycache__/
+__pycache__/
 *.pyc
 *.pyo
 *.pyd
 *.so
+.DS_Store
