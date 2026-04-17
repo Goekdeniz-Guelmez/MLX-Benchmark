@@ -1,7 +1,10 @@
 gen*.py
 .gen*.py
 .claude/
-results*/*
+results-for-paper/
+.results-for-paper/
+paper/
+.paper/
 *egg.info/
 *.log
 *.cache/
