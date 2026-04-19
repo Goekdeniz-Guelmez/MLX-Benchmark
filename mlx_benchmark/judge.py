@@ -19,6 +19,8 @@ def quick_match(sample: dict, model_answer: str) -> float | None:
     Returns:
         1.0 (correct), 0.0 (incorrect), or None (fall through to LLM judge).
     """
+    if not model_answer:
+        return 0.0
     stype = sample["type"]
     ref = sample["answer"].strip()
     ans = model_answer.strip()
@@ -53,7 +55,7 @@ def llm_judge(backend: Backend, question: str, model_answer: str, reference_answ
         f"REFERENCE_ANSWER:\n{reference_answer}"
     )
     response = backend.generate(prompt=prompt, system=JUDGE_SYSTEM, max_tokens=128, temperature=0.0)
-    return response.strip().upper().startswith("CORRECT")
+    return bool(response) and response.strip().upper().startswith("CORRECT")
 
 
 def evaluate(backend: Backend, sample: dict, model_answer: str) -> bool:

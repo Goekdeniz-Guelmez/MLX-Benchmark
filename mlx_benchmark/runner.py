@@ -1,7 +1,9 @@
 """Benchmark runner — orchestrates evaluation of a model on the dataset."""
 
 import json
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -73,6 +75,7 @@ def run_benchmark(
     host: str | None = None,
     api_key: str | None = None,
     base_url: str | None = None,
+    workers: int = 1,
     verbose: bool = True,
 ) -> tuple[list[BenchResult], BenchStats]:
     """Run the full benchmark.
@@ -93,10 +96,11 @@ def run_benchmark(
         categories: Filter to these categories.
         difficulties: Filter to these difficulties.
         types: Filter to these question types.
-        rate_limit_delay: Seconds between API calls.
+        rate_limit_delay: Seconds between API calls (per worker).
         host: Ollama host URL.
         api_key: API key for cloud providers.
         base_url: Custom base URL for OpenAI-compatible providers.
+        workers: Number of concurrent threads for batch processing (default 1 = sequential).
         verbose: Print progress to stdout.
 
     Returns:
@@ -122,36 +126,42 @@ def run_benchmark(
         print(f"MLX Benchmark — {model_backend.name}")
         print(f"  Judge:      {judge_backend.name}")
         print(f"  Samples:    {len(samples)}")
+        print(f"  Workers:    {workers}")
         print(f"  Types:      {sorted(set(s['type'] for s in samples))}")
         print(f"  Categories: {sorted(set(s['category'] for s in samples))}")
         print()
 
     stats = BenchStats()
     results: list[BenchResult] = []
+    print_lock = threading.Lock()
+    completed_count = [0]  # mutable counter shared across threads
 
-    for i, sample in enumerate(samples):
+    def _process_sample(idx: int, sample: dict) -> BenchResult | None:
         system, user_msg = build_prompt(sample)
 
-        # Query model
         try:
             model_answer = model_backend.generate(
                 prompt=user_msg, system=system, max_tokens=max_tokens, temperature=temperature
             )
         except Exception as e:
             if verbose:
-                print(f"  [{i + 1}/{len(samples)}] API error: {e}")
+                with print_lock:
+                    print(f"  [{idx + 1}/{len(samples)}] API error: {e}")
             time.sleep(2)
-            continue
+            return None
 
-        # Evaluate
         try:
             is_correct = evaluate(judge_backend, sample, model_answer)
         except Exception as e:
             if verbose:
-                print(f"  [{i + 1}/{len(samples)}] Judge error: {e}")
+                with print_lock:
+                    print(f"  [{idx + 1}/{len(samples)}] Judge error: {e}")
             is_correct = False
 
-        result = BenchResult(
+        if rate_limit_delay > 0:
+            time.sleep(rate_limit_delay)
+
+        return BenchResult(
             question=sample["question"],
             reference_answer=sample["answer"],
             model_answer=model_answer,
@@ -161,16 +171,44 @@ def run_benchmark(
             difficulty=sample["difficulty"],
             correct=is_correct,
         )
-        results.append(result)
-        stats.record(result)
 
-        if verbose:
-            marker = "✓" if is_correct else "✗"
-            pct = stats.accuracy
-            print(f"  [{i + 1}/{len(samples)}] {marker}  {result.type}/{result.difficulty}  acc: {pct:.1f}%")
+    if workers > 1:
+        futures_map: dict = {}
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            for i, sample in enumerate(samples):
+                future = executor.submit(_process_sample, i, sample)
+                futures_map[future] = i
 
-        if rate_limit_delay > 0:
-            time.sleep(rate_limit_delay)
+            # Collect in completion order; print immediately, store for ordered output
+            partial: dict[int, BenchResult | None] = {}
+            for future in as_completed(futures_map):
+                idx = futures_map[future]
+                result = future.result()
+                partial[idx] = result
+                if result is not None:
+                    stats.record(result)
+                    if verbose:
+                        with print_lock:
+                            completed_count[0] += 1
+                            marker = "✓" if result.correct else "✗"
+                            print(
+                                f"  [{completed_count[0]}/{len(samples)}] {marker}"
+                                f"  {result.type}/{result.difficulty}"
+                                f"  acc: {stats.accuracy:.1f}%"
+                            )
+
+        # Restore original dataset order for the returned list
+        results = [partial[i] for i in range(len(samples)) if partial.get(i) is not None]
+    else:
+        for i, sample in enumerate(samples):
+            result = _process_sample(i, sample)
+            if result is None:
+                continue
+            results.append(result)
+            stats.record(result)
+            if verbose:
+                marker = "✓" if result.correct else "✗"
+                print(f"  [{i + 1}/{len(samples)}] {marker}  {result.type}/{result.difficulty}  acc: {stats.accuracy:.1f}%")
 
     # Print summary
     if verbose and stats.total > 0:

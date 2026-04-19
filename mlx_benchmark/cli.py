@@ -156,6 +156,8 @@ examples:
                         help="Filter to specific question types")
     parser.add_argument("--rate-limit", type=float, default=None,
                         help="Delay in seconds between API calls (default: 0.5)")
+    parser.add_argument("--workers", type=int, default=None,
+                        help="Number of concurrent threads for batch processing (default: 1)")
     parser.add_argument("--host", default=None,
                         help="Ollama host URL (default: http://localhost:11434)")
     parser.add_argument("--api-key", default=None,
@@ -206,6 +208,8 @@ examples:
                        else config.get("temperature", 0.0) if config else 0.0),
         "rate_limit_delay": (args.rate_limit if args.rate_limit is not None
                              else config.get("rate_limit", 0.5) if config else 0.5),
+        "workers": (args.workers if args.workers is not None
+                    else config.get("workers", 1) if config else 1),
     }
 
     models = _parse_models(args)
@@ -232,6 +236,7 @@ examples:
             host=model_cfg["host"],
             api_key=model_cfg["api_key"],
             base_url=model_cfg["base_url"],
+            workers=defaults["workers"],
             **judge,
             verbose=True,
         )

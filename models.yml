@@ -30,22 +30,29 @@ models:
   # - name: qwen2.5-coder
   #   provider: ollama
 
-  # Cloud providers — set API keys via env vars:
+  # Cloud providers — api_key can be set here or via env vars
+  # (ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.):
   # - name: claude-sonnet-4-20250514
   #   provider: anthropic
+  #   api_key: sk-ant-...
   # - name: gpt-4o
   #   provider: openai
+  #   api_key: sk-...
   # - name: anthropic/claude-sonnet-4-20250514
   #   provider: openrouter
+  #   api_key: sk-or-...
   # - name: llama-3.2-70b-versatile
   #   provider: groq
+  #   api_key: gsk_...
 
 # Optional: override the judge model (defaults to same as model)
 # judge:
 #   name: gemma4:31b-cloud
 #   provider: ollama
+#   api_key: sk-ant-...
 
 # Optional: override default settings
 # max_tokens: 1024
 # temperature: 0.0
 # rate_limit: 0.5
+# workers: 4      # concurrent threads for batch processing (default: 1)

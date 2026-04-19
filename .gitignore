@@ -3,6 +3,8 @@ gen*.py
 .claude/
 results-for-paper/
 .results-for-paper/
+results/
+.results/
 paper/
 .paper/
 *egg.info/
