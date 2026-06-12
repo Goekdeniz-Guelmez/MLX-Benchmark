@@ -1,12 +1,13 @@
 """Benchmark runner — orchestrates evaluation of a model on the dataset."""
 
 import json
-import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+
+from tqdm.auto import tqdm
 
 from .backends import create_backend
 from .dataset import filter_dataset, load_dataset
@@ -133,8 +134,6 @@ def run_benchmark(
 
     stats = BenchStats()
     results: list[BenchResult] = []
-    print_lock = threading.Lock()
-    completed_count = [0]  # mutable counter shared across threads
 
     def _process_sample(idx: int, sample: dict) -> BenchResult | None:
         system, user_msg = build_prompt(sample)
@@ -145,8 +144,7 @@ def run_benchmark(
             )
         except Exception as e:
             if verbose:
-                with print_lock:
-                    print(f"  [{idx + 1}/{len(samples)}] API error: {e}")
+                tqdm.write(f"  [{idx + 1}/{len(samples)}] API error: {e}")
             time.sleep(2)
             return None
 
@@ -154,8 +152,7 @@ def run_benchmark(
             is_correct = evaluate(judge_backend, sample, model_answer)
         except Exception as e:
             if verbose:
-                with print_lock:
-                    print(f"  [{idx + 1}/{len(samples)}] Judge error: {e}")
+                tqdm.write(f"  [{idx + 1}/{len(samples)}] Judge error: {e}")
             is_correct = False
 
         if rate_limit_delay > 0:
@@ -172,43 +169,55 @@ def run_benchmark(
             correct=is_correct,
         )
 
-    if workers > 1:
-        futures_map: dict = {}
-        with ThreadPoolExecutor(max_workers=workers) as executor:
+    def _format_postfix(result: BenchResult | None) -> dict:
+        if result is None:
+            return {"acc": f"{stats.accuracy:.1f}%"}
+        return {
+            "acc": f"{stats.accuracy:.1f}%",
+            "last": f"{result.type}/{result.difficulty}",
+        }
+
+    bar = tqdm(
+        total=len(samples),
+        desc=model_backend.name,
+        unit="q",
+        dynamic_ncols=True,
+        disable=not verbose,
+    )
+
+    try:
+        if workers > 1:
+            futures_map: dict = {}
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                for i, sample in enumerate(samples):
+                    future = executor.submit(_process_sample, i, sample)
+                    futures_map[future] = i
+
+                # Collect in completion order; update bar as each finishes.
+                partial: dict[int, BenchResult | None] = {}
+                for future in as_completed(futures_map):
+                    idx = futures_map[future]
+                    result = future.result()
+                    partial[idx] = result
+                    if result is not None:
+                        stats.record(result)
+                        results.append(result)
+                    bar.set_postfix(_format_postfix(result))
+                    bar.update(1)
+
+            # Restore original dataset order for the returned list
+            ordered = [partial[i] for i in range(len(samples)) if partial.get(i) is not None]
+            results = ordered
+        else:
             for i, sample in enumerate(samples):
-                future = executor.submit(_process_sample, i, sample)
-                futures_map[future] = i
-
-            # Collect in completion order; print immediately, store for ordered output
-            partial: dict[int, BenchResult | None] = {}
-            for future in as_completed(futures_map):
-                idx = futures_map[future]
-                result = future.result()
-                partial[idx] = result
+                result = _process_sample(i, sample)
                 if result is not None:
+                    results.append(result)
                     stats.record(result)
-                    if verbose:
-                        with print_lock:
-                            completed_count[0] += 1
-                            marker = "✓" if result.correct else "✗"
-                            print(
-                                f"  [{completed_count[0]}/{len(samples)}] {marker}"
-                                f"  {result.type}/{result.difficulty}"
-                                f"  acc: {stats.accuracy:.1f}%"
-                            )
-
-        # Restore original dataset order for the returned list
-        results = [partial[i] for i in range(len(samples)) if partial.get(i) is not None]
-    else:
-        for i, sample in enumerate(samples):
-            result = _process_sample(i, sample)
-            if result is None:
-                continue
-            results.append(result)
-            stats.record(result)
-            if verbose:
-                marker = "✓" if result.correct else "✗"
-                print(f"  [{i + 1}/{len(samples)}] {marker}  {result.type}/{result.difficulty}  acc: {stats.accuracy:.1f}%")
+                bar.set_postfix(_format_postfix(result))
+                bar.update(1)
+    finally:
+        bar.close()
 
     # Print summary
     if verbose and stats.total > 0:

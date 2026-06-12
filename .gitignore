@@ -7,9 +7,11 @@ results/
 .results/
 paper/
 .paper/
-*egg.info/
+*.egg-info/
+*.egg-info
 *.log
 *.cache/
+*.cache
 *.jsonl
 *.tex
 *.pdf
@@ -20,3 +22,5 @@ __pycache__/
 *.pyd
 *.so
 .DS_Store
+.build/
+build/
